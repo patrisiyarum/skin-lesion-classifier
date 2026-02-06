@@ -84,6 +84,54 @@ def unfreeze_all(model: nn.Module):
         param.requires_grad = True
 
 
+def unfreeze_last_blocks(model: nn.Module, model_name: str = None):
+    """Unfreeze the last feature blocks + classifier head.
+
+    This is the intermediate step in a staged fine-tuning schedule:
+    frozen backbone → last blocks unfrozen → (optionally) full unfreeze.
+
+    Blocks unfrozen per architecture:
+        - EfficientNet: features[-3:] + classifier
+        - ResNet:       layer3, layer4, fc
+        - DenseNet:     denseblock3, denseblock4, transition3, norm5, classifier
+    """
+    model_name = model_name or CONFIG["model_name"]
+
+    # Start from fully frozen to be safe
+    for param in model.parameters():
+        param.requires_grad = False
+
+    if "efficientnet" in model_name:
+        # Unfreeze last 3 feature blocks + classifier
+        for block in model.features[-3:]:
+            for param in block.parameters():
+                param.requires_grad = True
+        for param in model.classifier.parameters():
+            param.requires_grad = True
+
+    elif "resnet" in model_name:
+        # Unfreeze layer3, layer4, fc
+        for module in [model.layer3, model.layer4, model.fc]:
+            for param in module.parameters():
+                param.requires_grad = True
+
+    elif "densenet" in model_name:
+        # Unfreeze the last dense block + transition + classifier
+        for name, param in model.named_parameters():
+            if any(k in name for k in [
+                "denseblock3", "transition3", "denseblock4", "norm5", "classifier",
+            ]):
+                param.requires_grad = True
+
+    else:
+        # Fallback: unfreeze everything
+        unfreeze_all(model)
+
+    n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    n_total = sum(p.numel() for p in model.parameters())
+    print(f"  [fine-tune] unfroze last blocks: {n_trainable:,}/{n_total:,} params trainable")
+
+
 # ---------------------------------------------------------------------------
 # Grad-CAM utility
 # ---------------------------------------------------------------------------

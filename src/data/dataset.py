@@ -1,48 +1,70 @@
-"""PyTorch dataset and dataloader factory for skin lesion images."""
+"""PyTorch Dataset and DataLoader factory for skin lesion images.
+
+Expects split CSVs (``data/splits/{train,val,test}.csv``) produced by
+``src.data.split_data`` with columns:
+
+    image_path   – absolute or project-relative path to the JPEG
+    label        – integer class index (0 = benign, 1 = malignant)
+    lesion_id    – group key used for the leak-free split
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from PIL import Image
 
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from src.config import (
-    CONFIG, SPLITS_DIR, PROCESSED_DIR, LABEL_TO_IDX, NUM_CLASSES,
-)
+from src.config import CONFIG, SPLITS_DIR, NUM_CLASSES
 from src.data.transforms import get_train_transforms, get_val_transforms
 
 
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------
 # Dataset
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------
 class SkinLesionDataset(Dataset):
-    """Custom dataset for skin lesion classification.
+    """Return ``(image_tensor, label)`` for each row in a split CSV.
 
-    Expects a CSV with at least two columns:
-        - ``image_id``  : filename stem (e.g. ``ISIC_0024306``)
-        - ``dx``        : diagnosis label string (e.g. ``mel``)
+    Parameters
+    ----------
+    csv_path : str | Path
+        Path to a CSV with at least ``image_path`` and ``label`` columns.
+    transform : callable, optional
+        A torchvision transform pipeline applied to each PIL image.
     """
 
-    def __init__(self, csv_path: str, image_dir: str, transform=None):
+    def __init__(self, csv_path: str | Path, transform=None):
         self.df = pd.read_csv(csv_path)
-        self.image_dir = Path(image_dir)
         self.transform = transform
 
-        # Encode string labels to integer indices
-        self.df["label"] = self.df["dx"].map(LABEL_TO_IDX)
+        # Validate required columns
+        for col in ("image_path", "label"):
+            if col not in self.df.columns:
+                raise ValueError(
+                    f"CSV {csv_path} is missing required column '{col}'. "
+                    f"Found columns: {list(self.df.columns)}"
+                )
 
+        self.image_paths: list[str] = self.df["image_path"].tolist()
+        self.labels: np.ndarray = self.df["label"].values.astype(np.int64)
+
+    # ------------------------------------------------------------------
+    # Core interface
+    # ------------------------------------------------------------------
     def __len__(self) -> int:
         return len(self.df)
 
-    def __getitem__(self, idx: int):
-        row = self.df.iloc[idx]
-        img_path = self.image_dir / f"{row['image_id']}.jpg"
-        image = Image.open(img_path).convert("RGB")
-        label = int(row["label"])
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
+        img_path = self.image_paths[idx]
+        label = int(self.labels[idx])
 
-        if self.transform:
+        image = Image.open(img_path).convert("RGB")
+
+        if self.transform is not None:
             image = self.transform(image)
 
         return image, label
@@ -51,45 +73,55 @@ class SkinLesionDataset(Dataset):
     # Helpers
     # ------------------------------------------------------------------
     def get_labels(self) -> np.ndarray:
-        """Return all labels as a numpy array (useful for samplers)."""
-        return self.df["label"].values
+        """All labels as a numpy array (useful for weighted samplers)."""
+        return self.labels
 
     def compute_class_weights(self) -> torch.Tensor:
         """Inverse-frequency class weights for imbalanced data."""
-        counts = np.bincount(self.df["label"].values, minlength=NUM_CLASSES)
+        counts = np.bincount(self.labels, minlength=max(NUM_CLASSES, 2))
         weights = 1.0 / (counts + 1e-6)
-        weights = weights / weights.sum() * NUM_CLASSES
+        weights = weights / weights.sum() * len(counts)
         return torch.tensor(weights, dtype=torch.float32)
 
+    def compute_pos_weight(self) -> torch.Tensor:
+        """Compute ``pos_weight`` for ``BCEWithLogitsLoss``.
 
-# ---------------------------------------------------------------------------
-# Dataloader factory
-# ---------------------------------------------------------------------------
+        Returns a scalar tensor equal to ``num_negative / num_positive``,
+        which up-weights the minority (malignant) class during training.
+        """
+        n_pos = int((self.labels == 1).sum())
+        n_neg = int((self.labels == 0).sum())
+        if n_pos == 0:
+            return torch.tensor(1.0)
+        return torch.tensor(n_neg / n_pos, dtype=torch.float32)
+
+
+# ------------------------------------------------------------------
+# DataLoader factory
+# ------------------------------------------------------------------
 def get_dataloaders(
-    train_csv: str = None,
-    val_csv: str = None,
-    test_csv: str = None,
-    image_dir: str = None,
-    batch_size: int = None,
-    num_workers: int = None,
-):
+    train_csv: str | Path | None = None,
+    val_csv: str | Path | None = None,
+    test_csv: str | Path | None = None,
+    batch_size: int | None = None,
+    num_workers: int | None = None,
+) -> dict[str, DataLoader | None]:
     """Create train / val / test DataLoaders.
 
-    Returns a dict ``{"train": ..., "val": ..., "test": ...}``.
-    Missing splits are set to ``None``.
+    Returns ``{"train": ..., "val": ..., "test": ...}``.
+    Missing or empty splits map to ``None``.
     """
-    train_csv = train_csv or str(SPLITS_DIR / "train.csv")
-    val_csv = val_csv or str(SPLITS_DIR / "val.csv")
-    test_csv = test_csv or str(SPLITS_DIR / "test.csv")
-    image_dir = image_dir or str(PROCESSED_DIR)
+    train_csv = Path(train_csv or SPLITS_DIR / "train.csv")
+    val_csv = Path(val_csv or SPLITS_DIR / "val.csv")
+    test_csv = Path(test_csv or SPLITS_DIR / "test.csv")
     batch_size = batch_size or CONFIG["batch_size"]
     num_workers = num_workers or CONFIG["num_workers"]
 
-    loaders = {}
+    loaders: dict[str, DataLoader | None] = {}
 
     # Train
-    if Path(train_csv).exists():
-        train_ds = SkinLesionDataset(train_csv, image_dir, get_train_transforms())
+    if train_csv.exists() and train_csv.stat().st_size > 50:
+        train_ds = SkinLesionDataset(train_csv, get_train_transforms())
         loaders["train"] = DataLoader(
             train_ds,
             batch_size=batch_size,
@@ -102,8 +134,8 @@ def get_dataloaders(
         loaders["train"] = None
 
     # Val
-    if Path(val_csv).exists():
-        val_ds = SkinLesionDataset(val_csv, image_dir, get_val_transforms())
+    if val_csv.exists() and val_csv.stat().st_size > 50:
+        val_ds = SkinLesionDataset(val_csv, get_val_transforms())
         loaders["val"] = DataLoader(
             val_ds,
             batch_size=batch_size,
@@ -115,8 +147,8 @@ def get_dataloaders(
         loaders["val"] = None
 
     # Test
-    if Path(test_csv).exists():
-        test_ds = SkinLesionDataset(test_csv, image_dir, get_val_transforms())
+    if test_csv.exists() and test_csv.stat().st_size > 50:
+        test_ds = SkinLesionDataset(test_csv, get_val_transforms())
         loaders["test"] = DataLoader(
             test_ds,
             batch_size=batch_size,

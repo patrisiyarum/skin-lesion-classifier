@@ -15,8 +15,11 @@ from sklearn.metrics import (
 # ---------------------------------------------------------------------------
 # Aggregate metrics
 # ---------------------------------------------------------------------------
-def compute_metrics(y_true, y_pred, average: str = "weighted") -> dict:
-    """Compute standard classification metrics."""
+def compute_metrics(y_true, y_pred, average: str = "binary") -> dict:
+    """Compute standard classification metrics.
+
+    Default *average* is ``"binary"`` for the binary task.
+    """
     return {
         "accuracy": accuracy_score(y_true, y_pred),
         "precision": precision_score(y_true, y_pred, average=average, zero_division=0),
@@ -26,7 +29,23 @@ def compute_metrics(y_true, y_pred, average: str = "weighted") -> dict:
 
 
 # ---------------------------------------------------------------------------
-# AUC (one-vs-rest)
+# AUC — binary
+# ---------------------------------------------------------------------------
+def compute_binary_auc(y_true, y_probs) -> float:
+    """Compute binary AUC.
+
+    Args:
+        y_true: ground-truth binary labels, shape ``(N,)``.
+        y_probs: predicted probabilities of the *positive* class, shape ``(N,)``.
+    """
+    try:
+        return roc_auc_score(y_true, y_probs)
+    except ValueError:
+        return 0.0
+
+
+# ---------------------------------------------------------------------------
+# AUC — multi-class (kept for future use)
 # ---------------------------------------------------------------------------
 def compute_auc(y_true, y_probs, average: str = "weighted") -> float:
     """Compute multi-class AUC using one-vs-rest strategy.
@@ -38,7 +57,6 @@ def compute_auc(y_true, y_probs, average: str = "weighted") -> float:
     try:
         return roc_auc_score(y_true, y_probs, multi_class="ovr", average=average)
     except ValueError:
-        # Can happen if a class is missing from the batch
         return 0.0
 
 

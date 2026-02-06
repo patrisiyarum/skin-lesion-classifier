@@ -3,8 +3,11 @@
 # Run inference on a single image
 # Usage:
 #   bash scripts/predict.sh --image path/to/image.jpg
-#   bash scripts/predict.sh --image path/to/image.jpg --grad-cam
-#   bash scripts/predict.sh --image path/to/image.jpg --checkpoint models/best_model.pth
+#   bash scripts/predict.sh --image path/to/image.jpg --gradcam
+#   bash scripts/predict.sh --image path/to/image.jpg --ckpt models/best_model.pth --gradcam
+#
+# Generate batch Grad-CAM report over the test set:
+#   bash scripts/predict.sh --ckpt models/best_model.pth --gradcam-report
 # ============================================================
 
 set -e

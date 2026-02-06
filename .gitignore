@@ -1,7 +1,10 @@
 data/raw/
 data/processed/
-models/*.pth
+reports/*.png
+reports/*.csv
+reports/*.json
 __pycache__/
 *.pyc
 .env
 .DS_Store
+.venv/

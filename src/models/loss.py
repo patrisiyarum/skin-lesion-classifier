@@ -1,4 +1,4 @@
-"""Loss functions for training: Cross-Entropy, Focal Loss, Weighted CE."""
+"""Loss functions for training: BCE (binary), Cross-Entropy, Focal Loss."""
 
 import torch
 import torch.nn as nn
@@ -8,7 +8,7 @@ from src.config import CONFIG
 
 
 # ---------------------------------------------------------------------------
-# Focal Loss
+# Focal Loss (multi-class)
 # ---------------------------------------------------------------------------
 class FocalLoss(nn.Module):
     """Focal Loss to down-weight easy examples and focus on hard ones.
@@ -46,16 +46,27 @@ class FocalLoss(nn.Module):
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
-def get_criterion(class_weights: torch.Tensor = None, device: str = "cpu") -> nn.Module:
+def get_criterion(
+    pos_weight: torch.Tensor = None,
+    class_weights: torch.Tensor = None,
+    device: str = "cpu",
+) -> nn.Module:
     """Return the loss function specified in CONFIG.
 
     Args:
-        class_weights: optional inverse-frequency weights from the dataset.
+        pos_weight: for BCEWithLogitsLoss — scalar tensor ``num_neg / num_pos``.
+        class_weights: for multi-class CE / focal — per-class weight tensor.
         device: target device for weight tensors.
     """
     loss_name = CONFIG["loss"]
-    label_smoothing = CONFIG.get("label_smoothing", 0.0)
 
+    if loss_name == "bce":
+        pw = pos_weight.to(device) if pos_weight is not None else None
+        return nn.BCEWithLogitsLoss(pos_weight=pw)
+
+    # ------ multi-class losses (kept for future use) ------
+
+    label_smoothing = CONFIG.get("label_smoothing", 0.0)
     if class_weights is not None:
         class_weights = class_weights.to(device)
 

@@ -14,21 +14,27 @@ SPLITS_DIR = DATA_DIR / "splits"
 MODELS_DIR = PROJECT_ROOT / "models"
 
 # ---------------------------------------------------------------------------
-# HAM10000 class mapping
+# Binary classification labels
 # ---------------------------------------------------------------------------
-CLASS_NAMES = [
-    "akiec",   # Actinic keratoses / Bowen's disease
-    "bcc",     # Basal cell carcinoma
-    "bkl",     # Benign keratosis-like lesions
-    "df",      # Dermatofibroma
-    "mel",     # Melanoma
-    "nv",      # Melanocytic nevi
-    "vasc",    # Vascular lesions
-]
+CLASS_NAMES = ["benign", "malignant"]
+NUM_CLASSES = 1  # single-logit binary output
 
-LABEL_TO_IDX = {name: idx for idx, name in enumerate(CLASS_NAMES)}
-IDX_TO_LABEL = {idx: name for idx, name in enumerate(CLASS_NAMES)}
-NUM_CLASSES = len(CLASS_NAMES)
+# Optional mapping from HAM10000 7-class dx labels to binary
+MALIGNANT_CLASSES = {"mel", "bcc", "akiec"}
+BENIGN_CLASSES = {"bkl", "df", "nv", "vasc"}
+
+# Label ↔ index mappings
+LABEL_TO_IDX = {"benign": 0, "malignant": 1}
+IDX_TO_LABEL = {0: "benign", 1: "malignant"}
+
+
+def dx_to_binary(dx: str) -> int:
+    """Map a HAM10000 ``dx`` string to a binary label (0=benign, 1=malignant)."""
+    if dx in MALIGNANT_CLASSES:
+        return 1
+    if dx in BENIGN_CLASSES:
+        return 0
+    raise ValueError(f"Unknown dx value: {dx!r}")
 
 # ---------------------------------------------------------------------------
 # ImageNet normalisation stats (used for pretrained backbones)
@@ -71,11 +77,20 @@ CONFIG = {
     "early_stopping_patience": 7,
     "grad_clip_max_norm": 1.0,   # set to None to disable
 
+    # Augmentation
+    "augment": "basic",          # "basic" | "strong"
+
+    # Fine-tuning schedule
+    "fine_tune": False,          # enable staged freeze → unfreeze
+    "fine_tune_unfreeze_epoch": 2,  # 0-based epoch to unfreeze last blocks
+
+    # Class-imbalance handling
+    "pos_weight": None,          # None | "auto" — auto computes neg/pos ratio
+
     # Loss
-    "loss": "focal",             # "ce" | "focal" | "weighted_ce"
+    "loss": "bce",               # "bce" for binary classification
     "focal_alpha": 1.0,
     "focal_gamma": 2.0,
-    "label_smoothing": 0.1,
 
     # Device
     "device": "cuda",            # overridden at runtime if CUDA unavailable
