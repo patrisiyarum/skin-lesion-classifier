@@ -17,6 +17,8 @@ Usage:
     python src/train/evaluate.py --ckpt models/best_model.pth --split test
 """
 
+from __future__ import annotations
+
 # ---------------------------------------------------------------------------
 # Path fix: allow  python src/train/evaluate.py  from project root
 # ---------------------------------------------------------------------------

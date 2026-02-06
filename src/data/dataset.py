@@ -23,9 +23,9 @@ from src.config import CONFIG, SPLITS_DIR, NUM_CLASSES
 from src.data.transforms import get_train_transforms, get_val_transforms
 
 
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Dataset
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 class SkinLesionDataset(Dataset):
     """Return ``(image_tensor, label)`` for each row in a split CSV.
 
@@ -52,9 +52,9 @@ class SkinLesionDataset(Dataset):
         self.image_paths: list[str] = self.df["image_path"].tolist()
         self.labels: np.ndarray = self.df["label"].values.astype(np.int64)
 
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # Core interface
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     def __len__(self) -> int:
         return len(self.df)
 
@@ -69,9 +69,9 @@ class SkinLesionDataset(Dataset):
 
         return image, label
 
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     def get_labels(self) -> np.ndarray:
         """All labels as a numpy array (useful for weighted samplers)."""
         return self.labels
@@ -96,9 +96,9 @@ class SkinLesionDataset(Dataset):
         return torch.tensor(n_neg / n_pos, dtype=torch.float32)
 
 
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # DataLoader factory
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def get_dataloaders(
     train_csv: str | Path | None = None,
     val_csv: str | Path | None = None,
