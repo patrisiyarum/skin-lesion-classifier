@@ -27,9 +27,9 @@ import pandas as pd
 from src.config import CONFIG, RAW_DIR, SPLITS_DIR, dx_to_binary
 
 
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Stratified group split
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def stratified_group_split(
     df: pd.DataFrame,
     group_col: str = "lesion_id",
@@ -90,9 +90,9 @@ def stratified_group_split(
     return train_df, val_df, test_df
 
 
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Build output CSVs
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def _detect_separator(csv_path: str) -> str:
     """Sniff whether the metadata CSV is tab- or comma-separated."""
     with open(csv_path) as f:
@@ -114,7 +114,7 @@ def build_splits(
 
     Each output CSV contains:
         image_path  – relative path like ``data/raw/ISIC_0024306.jpg``
-        label       – integer class index (0–6)
+        label       – binary class index (0 = benign, 1 = malignant)
         lesion_id   – the grouping key used for the split
     """
     seed = seed if seed is not None else CONFIG["seed"]
@@ -194,9 +194,9 @@ def build_splits(
     return train_df, val_df, test_df
 
 
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # CLI
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Create leak-free lesion-grouped splits for HAM10000",
