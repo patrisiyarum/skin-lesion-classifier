@@ -8,3 +8,5 @@ __pycache__/
 .env
 .DS_Store
 .venv/
+frontend/dist/
+frontend/node_modules/
